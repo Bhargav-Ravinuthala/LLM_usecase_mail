@@ -1,7 +1,10 @@
-// LLMAnalysisDashboard.js
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import AWS from 'aws-sdk';
-import logo from './company-logo.png'
+import logo from './company-logo.png';
+
+import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom';
+import DocPage from './landingdoc.js';  // Import the documentation page
+
 import {
   ArrowRight,
   Cpu,
@@ -12,7 +15,10 @@ import {
   Shield,
   Database,
   AlertTriangle,
-  Target
+  Target,
+  X,
+  BookOpen // Add this new icon for documentation link
+  
 } from 'lucide-react';
 import {
   LineChart,
@@ -66,7 +72,115 @@ const Button = ({ children, onClick, disabled, variant = 'primary', className = 
   );
 };
 
-// Modal Component
+const WelcomeModal = ({ isOpen, onClose }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+      <div className="bg-white rounded-xl p-8 w-full max-w-2xl relative shadow-2xl transform transition-all">
+        {/* Close button */}
+        <button 
+          onClick={onClose}
+          className="absolute top-6 right-6 text-gray-400 hover:text-gray-600 transition-colors"
+          aria-label="Close modal"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
+        {/* Header */}
+        <div className="mb-6">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="bg-blue-100 p-2 rounded-lg">
+              <Cpu className="w-6 h-6 text-blue-600" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900">Welcome to LLM Use Case Analyzer</h2>
+          </div>
+          <div className="h-1 w-20 bg-blue-600 rounded-full"></div>
+        </div>
+
+        {/* Content */}
+        <div className="space-y-6">
+          {/* Main message */}
+          <p className="text-lg text-gray-600 leading-relaxed">
+            Unlock insights about your AI use case with our powerful analysis tool. Get detailed recommendations, infrastructure requirements, and risk assessments tailored to your needs.
+          </p>
+
+          {/* Features */}
+          <div className="grid grid-cols-2 gap-4 py-4">
+            <div className="flex items-start gap-3">
+              <div className="mt-1">
+                <Target className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="font-medium text-gray-900">Use Case Analysis</h3>
+                <p className="text-sm text-gray-500">Get detailed insights and classifications</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="mt-1">
+                <Shield className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="font-medium text-gray-900">Risk Assessment</h3>
+                <p className="text-sm text-gray-500">Identify potential challenges</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="mt-1">
+                <DollarSign className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="font-medium text-gray-900">Cost Estimation</h3>
+                <p className="text-sm text-gray-500">Get detailed pricing insights</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="mt-1">
+                <Database className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="font-medium text-gray-900">Infrastructure Guide</h3>
+                <p className="text-sm text-gray-500">Technical requirements</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Documentation link */}
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+            <div className="flex items-center gap-3">
+              <BookOpen className="w-5 h-5 text-blue-600" />
+              <div className="flex-1">
+                <h3 className="font-medium text-gray-900">Need more information?</h3>
+                <p className="text-sm text-gray-500">Check our comprehensive documentation for detailed steps</p>
+              </div>
+              <Link 
+                to="/docs" 
+                className="flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium text-sm"
+                onClick={onClose}
+              >
+                View Docs
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+            </div>
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex gap-4 pt-4">
+            <button
+              onClick={onClose}
+              className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+            >
+              Get Started
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Email Modal Component
 const EmailModal = ({ isOpen, onClose, onSubmit }) => {
   const [email, setEmail] = useState('');
 
@@ -187,11 +301,12 @@ const PricingCard = ({ pricing }) => (
 );
 
 // Main Dashboard Component
-const App = () => {
+const Dashboard  = () => {
   const [userInput, setUserInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [analysisResult, setAnalysisResult] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(true);
 
   // Configure AWS SDK
   AWS.config.update({
@@ -202,11 +317,12 @@ const App = () => {
 
   const openModal = () => setIsModalOpen(true);
   const closeModal = () => setIsModalOpen(false);
+  const closeWelcomeModal = () => setShowWelcome(false);
 
   const handleEmailSubmit = async (email) => {
     setIsLoading(true);
     try {
-      const response = await fetch('https://7f92-146-190-241-217.ngrok-free.app/analyze', {
+      const response = await fetch('http://127.0.0.1:8000/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ use_case: userInput })
@@ -233,9 +349,11 @@ const App = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 p-8">
-<div style={{display:'flex' , justifyContent:"end" , padding:'10px'}}>
-  <img src={logo} alt="logo" width="120" height="40"/>
-</div>
+      <WelcomeModal isOpen={showWelcome} onClose={closeWelcomeModal} />
+      
+      <div style={{display:'flex', justifyContent:"end", padding:'10px'}}>
+       
+      </div>
       <div className="max-w-7xl mx-auto space-y-8">
         <Card>
           <CardHeader>
@@ -244,30 +362,25 @@ const App = () => {
               Enter your AI use case description and get detailed analysis and recommendations
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <textarea
-              placeholder="Describe your AI use case here..."
-              className="w-full min-h-32 mb-4 p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              value={userInput}
+<CardContent>
+  <textarea
+    placeholder={`Describe your AI use case here...
+Example: AI-based customer support chatbot hosted in Cloud with an estimated 1000 global customers`}
+    className="w-full min-h-32 mb-4 p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+    value={userInput}
               onChange={(e) => setUserInput(e.target.value)}
             />
             <Button
               onClick={openModal}
-              disabled={!userInput || isLoading} // Button is disabled if no input or while loading
+              disabled={!userInput || isLoading}
               className="w-full md:w-auto"
             >
               {isLoading ? 'Analyzing...' : 'Analyze Use Case'}
             </Button>
-
           </CardContent>
         </Card>
 
-        {/* {analysisResult && (
-          <div className="space-y-6">
-            <h2 className="text-2xl font-bold">Analysis Results</h2>
-          </div>
-        )} */}
-         {analysisResult && (
+        {analysisResult && (
           <div className="space-y-6">
             <div className="flex justify-between items-center">
               <h2 className="text-2xl font-bold">Analysis Results</h2>
@@ -367,5 +480,50 @@ const App = () => {
     </div>
   );
 };
+
+const Layout = ({ children }) => {
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <header className="bg-white shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+          <Link to="/" className="flex items-center gap-2">
+            <img src={logo} alt="logo" width="120" height="40"/>
+            
+          </Link>
+          <nav className="flex gap-6">
+            <Link 
+              to="/" 
+              className="text-gray-600 hover:text-gray-900 font-medium"
+            >
+              Analyzer
+            </Link>
+            <Link 
+              to="/docs" 
+              className="text-gray-600 hover:text-gray-900 font-medium"
+            >
+              Documentation
+            </Link>
+          </nav>
+        </div>
+      </header>
+      {children}
+    </div>
+  );
+};
+
+// Main App component with routing
+const App = () => {
+  return (
+    <Router>
+      <Layout>
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/docs" element={<DocPage />} />
+        </Routes>
+      </Layout>
+    </Router>
+  );
+};
+
 
 export default App;
